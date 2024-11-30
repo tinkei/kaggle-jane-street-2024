@@ -1,0 +1,4 @@
+{
+    "editor.rulers": [80, 120],
+    "python.defaultInterpreterPath": "~\\venvs\\rtmdf\\Scripts\\python.exe"
+}

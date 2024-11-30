@@ -1,0 +1,42 @@
+[build-system]
+requires = [
+    "setuptools>=61",
+    # "setuptools_scm[toml]>=7",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtmdf"
+version = "0.0.1"
+description = "Helper scripts for Kaggle competition Jane Street Real-Time Market Data Forecasting"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "black",
+    "gpustat",
+    "isort",
+    "lightgbm",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "plotly",
+    "polars",
+    "scikit-learn",
+    "scipy",
+    "streamlit",
+    "timm",
+    "torch"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.black]
+line-length = 120
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+py_version = 39
+line_length = 120
