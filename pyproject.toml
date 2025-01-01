@@ -25,6 +25,7 @@ dependencies = [
     "polars",
     "scikit-learn",
     "scipy",
+    "sympy",
     "streamlit",
     "timm",
     "torch @ https://download.pytorch.org/whl/cu124/torch-2.5.1%2Bcu124-cp312-cp312-win_amd64.whl#sha256=3c3f705fb125edbd77f9579fa11a138c56af8968a10fc95834cdd9fdf4f1f1a6",

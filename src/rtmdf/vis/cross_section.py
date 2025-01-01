@@ -112,7 +112,7 @@ def plot_column_given_symbol_averaged_over_time(
     chart.display()
 
 
-def plot_column_correlation_given_symbol(
+def plot_lagged_correlations_given_symbol(
     df: pl.LazyFrame,
     col: str,
     symbol_id: int,
