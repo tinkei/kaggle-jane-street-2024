@@ -11,13 +11,14 @@ name = "rtmdf"
 version = "0.0.1"
 description = "Helper scripts for Kaggle competition Jane Street Real-Time Market Data Forecasting"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "black",
     "gpustat",
     "isort",
     "lightgbm",
     "matplotlib",
+    "notebook",
     "numpy",
     "pandas",
     "plotly",
@@ -36,9 +37,9 @@ where = ["src"]
 
 [tool.black]
 line-length = 120
-target-version = ["py310"]
+target-version = ["py312"]
 
 [tool.isort]
 profile = "black"
-py_version = 310
+py_version = 312
 line_length = 120
