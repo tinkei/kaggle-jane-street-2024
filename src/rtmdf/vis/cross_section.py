@@ -162,6 +162,7 @@ def plot_lagged_correlations_given_symbol(
 
     subset_unpivot = subset.unpivot(index="date_id").with_columns(opacity=0.5)
     try:
+        alt.data_transformers.disable_max_rows()
         chart = (
             subset_unpivot.plot.line(x="date_id", y="value:Q", color="variable", opacity="opacity")
             .properties(width=1024)
