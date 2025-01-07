@@ -71,7 +71,7 @@ class BlockV3(nn.Module):
 
 class NeuralNetworkV3(nn.Module):
     def __init__(
-        self, in_size: int = 82, out_size: int = 9, hidden: int = 1024, num_layers: int = 10, dropout: float = 0.5
+        self, in_size: int = 82, out_size: int = 9, hidden: int = 512, num_layers: int = 20, dropout: float = 0.5
     ):
         super().__init__()
 
@@ -86,6 +86,39 @@ class NeuralNetworkV3(nn.Module):
         self.layers = []
         for _ in range(self.num_layers):
             self.layers.append(BlockV3(hidden, hidden, dropout))
+        self.layers = nn.ModuleList(self.layers)
+
+        self.output_block = nn.Sequential(
+            nn.BatchNorm1d(hidden),
+            nn.Linear(hidden, out_size),
+        )
+
+    def forward(self, x):
+        x = self.input_block(x)
+        for i in range(self.num_layers):
+            x = self.layers[i](x)
+        x = self.output_block(x)
+        return x
+
+
+class NeuralNetworkV4(nn.Module):
+    def __init__(
+        self, in_size: int = 82, out_size: int = 9, hidden: int = 512, num_layers: int = 20, dropout: float = 0.5
+    ):
+        super().__init__()
+
+        self.input_block = nn.Sequential(
+            nn.Linear(in_size, hidden),
+            nn.BatchNorm1d(hidden),
+            nn.Dropout(dropout),
+            nn.GELU(),
+        )
+
+        self.num_layers = num_layers
+        self.layers = []
+        for _ in range(self.num_layers):
+            self.layers.append(BlockV3(hidden, hidden, dropout))
+        self.layers = nn.ModuleList(self.layers)
 
         self.output_block = nn.Sequential(
             nn.BatchNorm1d(hidden),
