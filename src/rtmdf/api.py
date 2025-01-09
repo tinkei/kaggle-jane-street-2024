@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from time import time
 
 import polars as pl
 
@@ -9,6 +10,7 @@ def serve_data(df: pl.LazyFrame) -> Iterator[tuple[pl.DataFrame, pl.DataFrame | 
     """Serve test and lags data like the submission API does."""
     unique_dates = df.select("date_id").unique().sort(by=["date_id"]).collect().to_series(0)
     for date_id in unique_dates:
+        time_per_date = time()
         subset = df.filter(pl.col("date_id") == date_id).collect()
         unique_times = subset.select("time_id").unique().sort(by=["time_id"]).to_series(0)
         for time_id in unique_times:
@@ -22,12 +24,15 @@ def serve_data(df: pl.LazyFrame) -> Iterator[tuple[pl.DataFrame, pl.DataFrame | 
                 )
                 if lags.is_empty():
                     lags = None
+                else:
+                    lags = lags.with_columns(pl.lit(date_id).alias("date_id"))
             test = (
                 subset.filter(pl.col("time_id") == time_id)
                 .select(INDEX + ["weight", pl.lit(True).alias("is_scored")] + FEATURES)
                 .with_row_index(name="row_id")
             )
             yield test, lags
+        print(f"Processing date {date_id} took {time() - time_per_date:.2f}s.")
 
 
 if __name__ == "__main__":

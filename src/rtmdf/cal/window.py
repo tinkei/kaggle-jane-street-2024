@@ -53,6 +53,8 @@ if __name__ == "__main__":
     # Compare implementations of `rolling()` vs `group_by_dynamic()`.
     from pathlib import Path
 
+    from IPython.display import display
+
     INPUT_PATH = Path("")  # TODO: Input your own path to the data sources.
     train_df = pl.scan_parquet(INPUT_PATH / "train.parquet")
     subset = train_df.filter((pl.col("date_id") == 1134) & (pl.col("symbol_id") == 23)).collect()
