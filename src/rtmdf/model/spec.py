@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+from torch import nn
+
 
 class BaseModelSpec(ABC):
     """Specifies everything a model should contain, from config to data transforms."""
@@ -10,6 +12,7 @@ class BaseModelSpec(ABC):
     _index: list[str] = ["date_id", "time_id", "symbol_id"]
     _features: list[str] = [f"feature_{i:02d}" for i in range(79)]
     _responders: list[str] = [f"responder_{i:01d}" for i in range(9)]
+    _model: nn.Module
 
     def __init__(self):
         # Default columns.
@@ -50,6 +53,11 @@ class BaseModelSpec(ABC):
     # @cols_w.setter
     # def cols_w(self, value: list[str]):
     #     self._cols_w = value
+
+    @property
+    def model(self) -> nn.Module:
+        """PyTorch neural network for prediction."""
+        return self._model
 
     # @property
     # @abstractmethod

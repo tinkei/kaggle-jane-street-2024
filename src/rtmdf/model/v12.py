@@ -1,4 +1,5 @@
 from rtmdf.constant import SMA_RESPONDER_MAP
+from rtmdf.model.mlp import NeuralNetworkV8
 from rtmdf.model.spec import BaseModelSpec
 
 
@@ -28,3 +29,20 @@ class ModelSpecV12(BaseModelSpec):
         for col in SMA_RESPONDER_MAP[20]:
             responder_y_cols.extend([f"{col}_lead_v2_{i}" for i in range(-10, 11)])  # 21 new targets.
         self._cols_y = self._responders + responder_y_cols
+
+        # PyTorch model.
+        self._model = NeuralNetworkV8(
+            in_size=82 + 79 * 2 + 90,
+            out_sma=2,
+            out_regress=9,
+            out_class=6,
+            out_lead_lag04=3,
+            out_lead_lag20=3,
+            hidden=320,
+            num_layers=12,
+            dropout=0.5,
+            num_class=4,
+            sma_steps=5,
+            num_lead_lag04=29,
+            num_lead_lag20=21,
+        )

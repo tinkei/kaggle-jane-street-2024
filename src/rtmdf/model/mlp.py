@@ -275,3 +275,105 @@ class NeuralNetworkV7(nn.Module):
         y_regress = self.output_block2(x)
         y_prob = self.output_block3(x).view(-1, self.num_class, self.out_class)
         return y_step, y_regress, y_prob
+
+
+class NeuralNetworkV8(nn.Module):
+    def __init__(
+        self,
+        in_size: int = 82,
+        out_sma: int = 2,
+        out_regress: int = 9,
+        out_class: int = 6,
+        out_lead_lag04: int = 3,
+        out_lead_lag20: int = 3,
+        hidden: int = 512,
+        num_layers: int = 12,
+        dropout: float = 0.5,
+        num_class: int = 4,
+        sma_steps: int = 5,
+        num_lead_lag04: int = 29,
+        num_lead_lag20: int = 21,
+    ):
+        super().__init__()
+
+        assert num_layers % 4 == 0, "This model requires the number of ResNet layers to be divisible by 4."
+
+        self.input_block = nn.Sequential(
+            nn.Linear(in_size, hidden),
+            nn.BatchNorm1d(hidden),
+            # nn.Dropout(dropout),  # Disabled, to make sure the model can learn from the means.
+            nn.GELU(),
+        )
+
+        self.num_layers = num_layers
+        self.layers = []
+        for _ in range(self.num_layers):
+            self.layers.append(BlockV3(hidden, hidden, dropout))
+        self.layers = nn.ModuleList(self.layers)
+
+        # Output group 1: Predict each time step and calculate the SMA later.
+        # Technically we predict every 4 time steps using SMA4, and average them to predict SMA20.
+        self.out_sma = out_sma
+        self.sma_steps = sma_steps
+        self.output_block1 = nn.Sequential(
+            nn.Linear(hidden, hidden // 2),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            nn.BatchNorm1d(hidden // 2),
+            nn.Linear(hidden // 2, sma_steps * out_sma),
+        )
+
+        # Output group 2: Regress directly the SMA responders.
+        self.out_regress = out_regress
+        self.output_block2 = nn.Sequential(
+            nn.Linear(hidden, hidden // 2),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            nn.BatchNorm1d(hidden // 2),
+            nn.Linear(hidden // 2, out_regress),
+        )
+
+        # Output group 3: Predict zero-crossings and avoid them.
+        self.out_class = out_class
+        self.num_class = num_class
+        self.output_block3 = nn.Sequential(
+            nn.Linear(hidden, hidden // 2),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            BlockV3(hidden // 2, hidden // 2, dropout),
+            nn.BatchNorm1d(hidden // 2),
+            nn.Linear(hidden // 2, num_class * out_class),
+            # nn.Softmax(dim=1),  # No need, because `nn.CrossEntropyLoss()` has LogSoftmax included.
+        )
+
+        # Output group 4a: Regress responders with SMA=4 from lag X to lead Y.
+        self.out_lead_lag04 = out_lead_lag04
+        self.num_lead_lag04 = num_lead_lag04
+        self.output_block4a = nn.Sequential(
+            BlockV3(hidden, hidden, dropout),
+            nn.BatchNorm1d(hidden),
+            nn.Linear(hidden, num_lead_lag04 * out_lead_lag04),
+        )
+
+        # Output group 4b: Regress responders with SMA=20 from lag X to lead Y.
+        self.out_lead_lag20 = out_lead_lag20
+        self.num_lead_lag20 = num_lead_lag20
+        self.output_block4b = nn.Sequential(
+            BlockV3(hidden, hidden, dropout),
+            nn.BatchNorm1d(hidden),
+            nn.Linear(hidden, num_lead_lag20 * out_lead_lag20),
+        )
+
+    def forward(self, x):
+        x = self.input_block(x)
+        for i in range(self.num_layers):
+            x = self.layers[i](x)
+            if i == int(round(self.num_layers * 0.75)):
+                y_lead_lag04 = self.output_block4a(x).view(-1, self.num_lead_lag04, self.out_lead_lag04)
+                y_lead_lag20 = self.output_block4b(x).view(-1, self.num_lead_lag20, self.out_lead_lag20)
+        y_sma = self.output_block1(x).view(-1, self.sma_steps, self.out_sma)
+        y_regress = self.output_block2(x)
+        y_prob = self.output_block3(x).view(-1, self.num_class, self.out_class)
+        return y_sma, y_regress, y_prob, y_lead_lag04, y_lead_lag20

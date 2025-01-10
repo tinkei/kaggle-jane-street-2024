@@ -1,3 +1,4 @@
+from rtmdf.model.mlp import NeuralNetworkV6
 from rtmdf.model.spec import BaseModelSpec
 
 
@@ -12,3 +13,6 @@ class ModelSpecV10(BaseModelSpec):
 
         # Config targets, if they are different from default.
         self._cols_y = self._responders
+
+        # PyTorch model.
+        self._model = NeuralNetworkV6(in_size=82 + 79, out_size=9, hidden=300, num_layers=20, dropout=0.5)
