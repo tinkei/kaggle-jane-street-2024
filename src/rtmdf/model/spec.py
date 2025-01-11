@@ -19,13 +19,18 @@ class BaseModelSpec(ABC):
     _model: nn.Module
     _mae_loss = nn.L1Loss()
     _mse_loss = nn.MSELoss()
-    _rsq_loss = r_square_loss
+    # _rsq_loss = r_square_loss
 
     def __init__(self):
         # Default columns.
         self._cols_x = ["time_id", "symbol_id", "weight"] + self.features
         self._cols_y = ["responder_6"]
         self._cols_w = ["weight"]
+
+    @staticmethod
+    def _rsq_loss(y_pred: torch.Tensor, y_true: torch.Tensor, weight: torch.Tensor) -> torch.Tensor:
+        """Compute modified R^2 loss as defined in competition."""
+        return r_square_loss(y_pred, y_true, weight)
 
     @property
     def index(self) -> list[str]:

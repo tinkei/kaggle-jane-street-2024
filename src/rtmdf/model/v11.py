@@ -1,3 +1,4 @@
+import numpy as np
 import polars as pl
 import torch
 from torch import nn
@@ -40,6 +41,9 @@ class ModelSpecV11(BaseModelSpec):
             dropout=0.5,
             steps_predict=5,
         )
+
+        # Cross-Entropy loss.
+        self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
         # Scale predictions smaller for training, then scale back during evaluation.
         self._scale_y = 100
@@ -89,10 +93,11 @@ class ModelSpecV11(BaseModelSpec):
         loss += (loss_sma004_r3 + loss_sma004_r6 + loss_sma020_r3 + loss_sma020_r6 + loss_sma_rsq) / 5
 
         # Debug sanity check.
-        assert all(["responder_3" in col for col in self.cols_y[[3]]])
-        assert all(["responder_6" in col for col in self.cols_y[[6]]])
-        assert all(["responder_5" in col for col in self.cols_y[[5, 13, 14, 15, 16]]])
-        assert all(["responder_8" in col for col in self.cols_y[[8, 17, 18, 19, 20]]])
+        debug_cols_y = np.array(self.cols_y)
+        assert all(["responder_3" in col for col in debug_cols_y[[3]]])
+        assert all(["responder_6" in col for col in debug_cols_y[[6]]])
+        assert all(["responder_5" in col for col in debug_cols_y[[5, 13, 14, 15, 16]]])
+        assert all(["responder_8" in col for col in debug_cols_y[[8, 17, 18, 19, 20]]])
 
         return loss, {
             "loss_rsq": loss_rsq,

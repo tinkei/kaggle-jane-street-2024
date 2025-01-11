@@ -22,7 +22,7 @@ class ModelSpecV09(BaseModelSpec):
         self._model = NeuralNetworkV5(in_size=82 + 79, out_size=9, hidden=100, num_layers=40, dropout=0.5)
 
         # Cross-Entropy loss.
-        self._xen_loss = None  # We'll define it later because we don't know which `device` we're on.
+        self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True

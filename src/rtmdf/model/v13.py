@@ -1,3 +1,4 @@
+import numpy as np
 import polars as pl
 import torch
 from torch import nn
@@ -34,6 +35,9 @@ class ModelSpecV13(BaseModelSpec):
             dropout=0.5,
             steps_predict=5,
         )
+
+        # Cross-Entropy loss.
+        self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
         # Scale predictions smaller for training, then scale back during evaluation.
         self._scale_y = 10
@@ -86,10 +90,11 @@ class ModelSpecV13(BaseModelSpec):
         loss += (loss_sma004_r3 + loss_sma004_r6 + loss_sma020_r3 + loss_sma020_r6 + loss_sma_rsq) / 5
 
         # Debug sanity check.
-        assert all(["responder_3" in col for col in self.cols_y[[3]]])
-        assert all(["responder_6" in col for col in self.cols_y[[6]]])
-        assert all(["responder_5" in col for col in self.cols_y[[5, 13, 14, 15, 16]]])
-        assert all(["responder_8" in col for col in self.cols_y[[8, 17, 18, 19, 20]]])
+        debug_cols_y = np.array(self.cols_y)
+        assert all(["responder_3" in col for col in debug_cols_y[[3]]])
+        assert all(["responder_6" in col for col in debug_cols_y[[6]]])
+        assert all(["responder_5" in col for col in debug_cols_y[[5, 13, 14, 15, 16]]])
+        assert all(["responder_8" in col for col in debug_cols_y[[8, 17, 18, 19, 20]]])
 
         return loss, {
             "loss_rsq": loss_rsq,
@@ -141,7 +146,7 @@ class ModelSpecV13(BaseModelSpec):
         pred_sma, pred_regress, pred_prob = y_pred
 
         pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
-        pred_regress = pred_regress[:, 3:9] * self._scale_y
+        pred_regress = pred_regress[:, 3:9] * self._scale_y  # Select only responders 3 - 8 from here on out.
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
@@ -153,7 +158,7 @@ class ModelSpecV13(BaseModelSpec):
 
         weight_sma = 0.75
         pred = (
-            pred_regress[:, [3, 6]].detach().cpu().numpy() * (1 - weight_sma)
+            pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
             + pred_sma.detach().cpu().numpy() * weight_sma
         )
         pred = pl.DataFrame(pred, schema=[f"responder_{i:01d}" for i in [3, 6]])
@@ -172,7 +177,7 @@ class ModelSpecV13(BaseModelSpec):
         pred_sma_raw = torch.clone(pred_sma)
 
         pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
-        pred_regress = pred_regress[:, 3:9] * self._scale_y
+        pred_regress = pred_regress[:, 3:9] * self._scale_y  # Select only responders 3 - 8 from here on out.
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
@@ -203,7 +208,7 @@ class ModelSpecV13(BaseModelSpec):
         pred = pred[[f"responder_{i:01d}" for i in range(9)]]
         # Include filtered predictions,
         pred_censored = (
-            pred_regress[:, [3, 6]].detach().cpu().numpy() * (1 - weight_sma)
+            pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
             + pred_sma.detach().cpu().numpy() * weight_sma
         )
         pred_censored = pl.DataFrame(pred_censored, schema=[f"responder_{i:01d}_censored" for i in [3, 6]])

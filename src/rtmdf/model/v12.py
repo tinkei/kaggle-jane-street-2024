@@ -1,3 +1,4 @@
+import numpy as np
 import polars as pl
 import torch
 from torch import nn
@@ -50,6 +51,9 @@ class ModelSpecV12(BaseModelSpec):
             num_lead_lag04=29,
             num_lead_lag20=21,
         )
+
+        # Cross-Entropy loss.
+        self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
         # Scale predictions smaller for training, then scale back during evaluation.
         self._scale_y = 100
@@ -123,17 +127,18 @@ class ModelSpecV12(BaseModelSpec):
         loss += (loss_ll_mse004 + loss_ll_mse020 + loss_ll_rsq) / 3
 
         # Debug sanity check.
-        assert all(["responder_3" in col for col in self.cols_y[[3]]])
-        assert all(["responder_6" in col for col in self.cols_y[[6]]])
-        assert all(["responder_2" in col for col in self.cols_y[9:14]])
-        assert all(["responder_5" in col for col in self.cols_y[14:19]])
-        assert all(["responder_8" in col for col in self.cols_y[19:24]])
-        assert all(["responder_2" in col for col in self.cols_y[24:53]])
-        assert all(["responder_5" in col for col in self.cols_y[53:82]])
-        assert all(["responder_8" in col for col in self.cols_y[82:111]])
-        assert all(["responder_0" in col for col in self.cols_y[111:132]])
-        assert all(["responder_3" in col for col in self.cols_y[132:153]])
-        assert all(["responder_6" in col for col in self.cols_y[153:174]])
+        debug_cols_y = np.array(self.cols_y)
+        assert all(["responder_3" in col for col in debug_cols_y[[3]]])
+        assert all(["responder_6" in col for col in debug_cols_y[[6]]])
+        assert all(["responder_2" in col for col in debug_cols_y[9:14]])
+        assert all(["responder_5" in col for col in debug_cols_y[14:19]])
+        assert all(["responder_8" in col for col in debug_cols_y[19:24]])
+        assert all(["responder_2" in col for col in debug_cols_y[24:53]])
+        assert all(["responder_5" in col for col in debug_cols_y[53:82]])
+        assert all(["responder_8" in col for col in debug_cols_y[82:111]])
+        assert all(["responder_0" in col for col in debug_cols_y[111:132]])
+        assert all(["responder_3" in col for col in debug_cols_y[132:153]])
+        assert all(["responder_6" in col for col in debug_cols_y[153:174]])
 
         return loss, {
             "loss_rsq": loss_rsq,
@@ -202,7 +207,7 @@ class ModelSpecV12(BaseModelSpec):
         # pred_lead_lag20.size() torch.Size([47956, 21, 3])
 
         pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
-        pred_regress = pred_regress[:, 3:9] * self._scale_y
+        pred_regress = pred_regress[:, 3:9] * self._scale_y  # Select only responders 3 - 8 from here on out.
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
@@ -221,7 +226,7 @@ class ModelSpecV12(BaseModelSpec):
         weight_reg = 0.25
         weight_ll = 0.00
         pred = (
-            pred_regress[:, [3, 6]].detach().cpu().numpy() * weight_reg
+            pred_regress[:, [0, 3]].detach().cpu().numpy() * weight_reg
             + pred_sma.detach().cpu().numpy() * weight_sma
             + pred_lead_lag20.detach().cpu().numpy() * weight_ll
         )
@@ -242,7 +247,7 @@ class ModelSpecV12(BaseModelSpec):
         pred_lead_lag20_raw = torch.clone(pred_lead_lag20)
 
         pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
-        pred_regress = pred_regress[:, 3:9] * self._scale_y
+        pred_regress = pred_regress[:, 3:9] * self._scale_y  # Select only responders 3 - 8 from here on out.
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
@@ -284,7 +289,7 @@ class ModelSpecV12(BaseModelSpec):
         pred = pred[[f"responder_{i:01d}" for i in range(9)]]
         # Include filtered predictions,
         pred_censored = (
-            pred_regress[:, [3, 6]].detach().cpu().numpy() * weight_reg
+            pred_regress[:, [0, 3]].detach().cpu().numpy() * weight_reg
             + pred_sma.detach().cpu().numpy() * weight_sma
             + pred_lead_lag20.detach().cpu().numpy() * weight_ll
         )
