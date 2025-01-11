@@ -49,6 +49,9 @@ class ModelSpecV11(BaseModelSpec):
         # Scale predictions smaller for training, then scale back during evaluation.
         self._scale_y = 100
 
+        # Scale final predictions (to avoid expensive mistakes).
+        self._scale_pred = 0.1
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -164,7 +167,7 @@ class ModelSpecV11(BaseModelSpec):
         pred = (
             pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
             + pred_sma.detach().cpu().numpy() * weight_sma
-        )
+        ) * self._scale_pred
         pred = pl.DataFrame(pred, schema=[f"responder_{i:01d}" for i in [3, 6]])
         pred = pred.select(pl.col("responder_6").alias("predict"))
         return pred  # Always a single column.
@@ -172,7 +175,7 @@ class ModelSpecV11(BaseModelSpec):
     def predict_custom(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" and other user-defined time series given input."""
         if to_device:
-            X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
+            X = X.to(self.device)
         y_pred = self._model(X)
         pred_sma, pred_regress, pred_prob = y_pred
 
@@ -214,7 +217,7 @@ class ModelSpecV11(BaseModelSpec):
         pred_censored = (
             pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
             + pred_sma.detach().cpu().numpy() * weight_sma
-        )
+        ) * self._scale_pred
         pred_censored = pl.DataFrame(pred_censored, schema=[f"responder_{i:01d}_censored" for i in [3, 6]])
         pred = pred.with_columns(
             responder_3_censored=pred_censored["responder_3_censored"],
