@@ -85,12 +85,12 @@ class ModelSpecV11(BaseModelSpec):
 
         # Loss from reconstructing SMA.
         # print("pred_sma.size()", pred_sma.size())  # (batch, 5, 2)
-        loss_sma004_r3 = self._mse_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]]) * self._scale_y
-        loss_sma004_r6 = self._mse_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]]) * self._scale_y
+        loss_sma004_r5 = self._mse_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]]) * self._scale_y
+        loss_sma004_r8 = self._mse_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]]) * self._scale_y
         loss_sma020_r3 = self._mse_loss(pred_sma[:, :, 0].mean(dim=1), y[:, 3]) * self._scale_y
         loss_sma020_r6 = self._mse_loss(pred_sma[:, :, 1].mean(dim=1), y[:, 6]) * self._scale_y
         loss_sma_rsq = self._rsq_loss(pred_sma.mean(dim=1), y[:, [3, 6]], w)  # .clamp(min=0.0, max=2.0)
-        loss += (loss_sma004_r3 + loss_sma004_r6 + loss_sma020_r3 + loss_sma020_r6 + loss_sma_rsq) / 5
+        loss += (loss_sma004_r5 + loss_sma004_r8 + loss_sma020_r3 + loss_sma020_r6 + loss_sma_rsq) / 5
 
         # Debug sanity check.
         debug_cols_y = np.array(self.cols_y)
@@ -103,8 +103,8 @@ class ModelSpecV11(BaseModelSpec):
             "loss_rsq": loss_rsq,
             "loss_mse": loss_mse,
             "loss_xen": loss_xen,
-            "loss_sma004_r3": loss_sma004_r3,
-            "loss_sma004_r6": loss_sma004_r6,
+            "loss_sma004_r5": loss_sma004_r5,
+            "loss_sma004_r8": loss_sma004_r8,
             "loss_sma020_r3": loss_sma020_r3,
             "loss_sma020_r6": loss_sma020_r6,
             "loss_sma_rsq": loss_sma_rsq,

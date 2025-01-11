@@ -95,20 +95,20 @@ class ModelSpecV12(BaseModelSpec):
         loss = loss_rsq + loss_mse / 2 + loss_xen / 4
 
         # Loss from reconstructing SMA.
-        loss_sma004_r3 = self._mse_loss(pred_sma[:, :, 0], y[:, 14:19]) * self._scale_y
-        loss_sma004_r6 = self._mse_loss(pred_sma[:, :, 1], y[:, 19:24]) * self._scale_y
+        loss_sma004_r5 = self._mse_loss(pred_sma[:, :, 0], y[:, 14:19]) * self._scale_y
+        loss_sma004_r8 = self._mse_loss(pred_sma[:, :, 1], y[:, 19:24]) * self._scale_y
         loss_sma020_r3 = self._mse_loss(pred_sma[:, :, 0].mean(dim=1), y[:, 3]) * self._scale_y
         loss_sma020_r6 = self._mse_loss(pred_sma[:, :, 1].mean(dim=1), y[:, 6]) * self._scale_y
-        loss_sma004_x = self._mse_loss(pred_sma[:, :, 0] - pred_sma[:, :, 1], y[:, 9:14]) * self._scale_y
-        loss_sma020_x = self._mse_loss((pred_sma[:, :, 0] - pred_sma[:, :, 1]).mean(dim=1), y[:, 0]) * self._scale_y
+        loss_sma004_r2 = self._mse_loss(pred_sma[:, :, 0] - pred_sma[:, :, 1], y[:, 9:14]) * self._scale_y
+        loss_sma020_r0 = self._mse_loss((pred_sma[:, :, 0] - pred_sma[:, :, 1]).mean(dim=1), y[:, 0]) * self._scale_y
         loss_sma_rsq = self._rsq_loss(pred_sma.mean(dim=1), y[:, [3, 6]], w) / 2
         loss += (
-            loss_sma004_r3
-            + loss_sma004_r6
+            loss_sma004_r5
+            + loss_sma004_r8
             + loss_sma020_r3
             + loss_sma020_r6
-            + loss_sma004_x
-            + loss_sma020_x
+            + loss_sma004_r2
+            + loss_sma020_r0
             + loss_sma_rsq
         ) / 7
 
@@ -144,12 +144,12 @@ class ModelSpecV12(BaseModelSpec):
             "loss_rsq": loss_rsq,
             "loss_mse": loss_mse,
             "loss_xen": loss_xen,
-            "loss_sma004_r3": loss_sma004_r3,
-            "loss_sma004_r6": loss_sma004_r6,
+            "loss_sma004_r5": loss_sma004_r5,
+            "loss_sma004_r8": loss_sma004_r8,
             "loss_sma020_r3": loss_sma020_r3,
             "loss_sma020_r6": loss_sma020_r6,
-            "loss_sma004_x": loss_sma004_x,
-            "loss_sma020_x": loss_sma020_x,
+            "loss_sma004_r2": loss_sma004_r2,
+            "loss_sma020_r0": loss_sma020_r0,
             "loss_sma_rsq": loss_sma_rsq,
             "loss_ll_mse004": loss_ll_mse004,
             "loss_ll_mse020": loss_ll_mse020,
@@ -173,7 +173,7 @@ class ModelSpecV12(BaseModelSpec):
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.01, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.10, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.25, pred_regress)
-        loss_rsq = self._rsq_loss(pred_regress[:, [6]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+        loss_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
 
         pred_sma = pred_sma.mean(dim=1) * self._scale_y
         pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.01, pred_sma)

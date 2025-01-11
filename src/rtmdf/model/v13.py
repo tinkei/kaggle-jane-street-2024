@@ -74,25 +74,40 @@ class ModelSpecV13(BaseModelSpec):
         y_class = torch.where(y_abs > 0.26, 3, y_class)
         loss_xen = self._xen_loss(pred_prob, y_class)
         loss_mse = self._mse_loss(pred_regress, y[:, :9]) * self._scale_y
-        loss_rsq = self._rsq_loss(pred_regress[:, 3:9], y[:, 3:9], w)  # / 6
+        loss_rsq = self._rsq_loss(pred_regress[:, 3:9], y[:, 3:9], w)
         loss = loss_rsq + loss_mse / 2 + loss_xen / 4
 
         # Loss from reconstructing SMA.
         # print("pred_sma.size()", pred_sma.size())  # (batch, 5, 2)
-        loss_sma004_r3 = self._mse_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]]) * self._scale_y
-        loss_sma004_r6 = self._mse_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]]) * self._scale_y
+        loss_sma004_r5 = self._mse_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]]) * self._scale_y
+        loss_sma004_r8 = self._mse_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]]) * self._scale_y
         loss_sma020_r3 = self._mse_loss(pred_sma[:, :, 0].mean(dim=1), y[:, 3]) * self._scale_y
         loss_sma020_r6 = self._mse_loss(pred_sma[:, :, 1].mean(dim=1), y[:, 6]) * self._scale_y
+        loss_sma004_r2 = self._mse_loss(pred_sma[:, :, 0] - pred_sma[:, :, 1], y[:, [2, 9, 10, 11, 12]]) * self._scale_y
+        loss_sma020_r0 = self._mse_loss((pred_sma[:, :, 0] - pred_sma[:, :, 1]).mean(dim=1), y[:, 0]) * self._scale_y
         loss_sma_rsq = self._rsq_loss(pred_sma.mean(dim=1), y[:, [3, 6]], w)
         loss_sma_rsq += self._rsq_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]], w)
         loss_sma_rsq += self._rsq_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]], w)
-        loss_sma_rsq /= 12  # 2 + 5 + 5. Adjust here s.t. outliers don't impact solution too much.
-        loss += (loss_sma004_r3 + loss_sma004_r6 + loss_sma020_r3 + loss_sma020_r6 + loss_sma_rsq) / 5
+        loss_sma_rsq /= 3  # 2 + 5 + 5. Adjust here s.t. outliers don't impact solution too much.
+        loss += (
+            (
+                loss_sma004_r5
+                + loss_sma004_r8
+                + loss_sma020_r3
+                + loss_sma020_r6
+                + loss_sma004_r2
+                + loss_sma020_r0
+                + loss_sma_rsq
+            )
+            / 7
+            / 2
+        )
 
         # Debug sanity check.
         debug_cols_y = np.array(self.cols_y)
         assert all(["responder_3" in col for col in debug_cols_y[[3]]])
         assert all(["responder_6" in col for col in debug_cols_y[[6]]])
+        assert all(["responder_2" in col for col in debug_cols_y[[2, 9, 10, 11, 12]]])
         assert all(["responder_5" in col for col in debug_cols_y[[5, 13, 14, 15, 16]]])
         assert all(["responder_8" in col for col in debug_cols_y[[8, 17, 18, 19, 20]]])
 
@@ -100,10 +115,12 @@ class ModelSpecV13(BaseModelSpec):
             "loss_rsq": loss_rsq,
             "loss_mse": loss_mse,
             "loss_xen": loss_xen,
-            "loss_sma004_r3": loss_sma004_r3,
-            "loss_sma004_r6": loss_sma004_r6,
+            "loss_sma004_r5": loss_sma004_r5,
+            "loss_sma004_r8": loss_sma004_r8,
             "loss_sma020_r3": loss_sma020_r3,
             "loss_sma020_r6": loss_sma020_r6,
+            "loss_sma004_r2": loss_sma004_r2,
+            "loss_sma020_r0": loss_sma020_r0,
             "loss_sma_rsq": loss_sma_rsq,
         }
 
@@ -124,7 +141,7 @@ class ModelSpecV13(BaseModelSpec):
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
-        loss_rsq = self._rsq_loss(pred_regress[:, [6]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+        loss_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
 
         pred_sma = pred_sma.mean(dim=1) * self._scale_y
         pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
