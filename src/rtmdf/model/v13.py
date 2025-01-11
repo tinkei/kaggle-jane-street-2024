@@ -139,21 +139,31 @@ class ModelSpecV13(BaseModelSpec):
         # print("pred_class  ", pred_class.size())    # (batch, num_responder)
 
         pred_regress = pred_regress[:, 3:9] * self._scale_y
+        loss_raw_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)
+        loss_kelly_rsq = self._rsq_loss(pred_regress[:, [3]] * 0.1, y[:, [6]], w)
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
-        loss_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+        loss_zerox_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
 
         pred_sma = pred_sma.mean(dim=1) * self._scale_y
+        loss_sma_raw_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)
+        loss_sma_kelly_rsq = self._rsq_loss(pred_sma[:, [1]] * 0.1, y[:, [6]], w)
         pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
         pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.25, pred_sma)
         pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.50, pred_sma)
-        loss_sma_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+        loss_sma_zerox_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
 
-        loss = loss_rsq + loss_sma_rsq
+        loss = (
+            loss_raw_rsq + loss_kelly_rsq + loss_zerox_rsq + loss_sma_raw_rsq + loss_sma_kelly_rsq + loss_sma_zerox_rsq
+        ) / 6
         return loss, {
-            "loss_rsq": loss_rsq,
-            "loss_sma_rsq": loss_sma_rsq,
+            "loss_raw_rsq": loss_raw_rsq,
+            "loss_kelly_rsq": loss_kelly_rsq,
+            "loss_zerox_rsq": loss_zerox_rsq,
+            "loss_sma_raw_rsq": loss_sma_raw_rsq,
+            "loss_sma_kelly_rsq": loss_sma_kelly_rsq,
+            "loss_sma_zerox_rsq": loss_sma_zerox_rsq,
         }
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
@@ -163,18 +173,18 @@ class ModelSpecV13(BaseModelSpec):
         y_pred = self._model(X)
         pred_sma, pred_regress, pred_prob = y_pred
 
-        pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
+        # pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
         pred_regress = pred_regress[:, 3:9] * self._scale_y  # Select only responders 3 - 8 from here on out.
-        pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
-        pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
-        pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
+        # pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
+        # pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
+        # pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
 
         pred_sma = pred_sma.mean(dim=1) * self._scale_y
-        pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
-        pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.25, pred_sma)
-        pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.50, pred_sma)
+        # pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
+        # pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.25, pred_sma)
+        # pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.50, pred_sma)
 
-        weight_sma = 0.75
+        weight_sma = 0.4
         pred = (
             pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
             + pred_sma.detach().cpu().numpy() * weight_sma
@@ -239,5 +249,5 @@ class ModelSpecV13(BaseModelSpec):
     def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
         """Transform data source before splitting into inputs and targets."""
         df = append_mean_features(df)
-        df = append_lagged_features(df)
+        df = append_lagged_features(df, 1)
         return df

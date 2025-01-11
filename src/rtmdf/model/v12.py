@@ -104,14 +104,18 @@ class ModelSpecV12(BaseModelSpec):
         loss_sma020_r0 = self._mse_loss((pred_sma[:, :, 0] - pred_sma[:, :, 1]).mean(dim=1), y[:, 0]) * self._scale_y
         loss_sma_rsq = self._rsq_loss(pred_sma.mean(dim=1), y[:, [3, 6]], w) / 2
         loss += (
-            loss_sma004_r5
-            + loss_sma004_r8
-            + loss_sma020_r3
-            + loss_sma020_r6
-            + loss_sma004_r2
-            + loss_sma020_r0
-            + loss_sma_rsq
-        ) / 7
+            (
+                loss_sma004_r5
+                + loss_sma004_r8
+                + loss_sma020_r3
+                + loss_sma020_r6
+                + loss_sma004_r2
+                + loss_sma020_r0
+                + loss_sma_rsq
+            )
+            / 7
+            / 2
+        )
 
         # Loss from extra regression terms.
         loss_ll_mse004 = self._mse_loss(pred_lead_lag04[:, :, 0], y[:, 24:53])
@@ -124,7 +128,7 @@ class ModelSpecV12(BaseModelSpec):
         loss_ll_mse020 *= self._scale_y / 3
         loss_ll_rsq = self._rsq_loss(pred_lead_lag04[:, :, 1], y[:, 53:82], w)
         loss_ll_rsq += self._rsq_loss(pred_lead_lag04[:, :, 2], y[:, 82:111], w)
-        loss_ll_rsq /= 58
+        loss_ll_rsq /= 2
         loss += (loss_ll_mse004 + loss_ll_mse020 + loss_ll_rsq) / 3
 
         # Debug sanity check.
@@ -171,28 +175,50 @@ class ModelSpecV12(BaseModelSpec):
         # print("pred_class  ", pred_class.size())    # (batch, num_responder)
 
         pred_regress = pred_regress[:, 3:9] * self._scale_y
+        loss_raw_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)
+        loss_kelly_rsq = self._rsq_loss(pred_regress[:, [3]] * 0.1, y[:, [6]], w)
         pred_regress = torch.where(pred_class == 0, pred_regress * 0.01, pred_regress)
         pred_regress = torch.where(pred_class == 1, pred_regress * 0.10, pred_regress)
         pred_regress = torch.where(pred_class == 2, pred_regress * 0.25, pred_regress)
-        loss_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+        loss_zerox_rsq = self._rsq_loss(pred_regress[:, [3]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
 
         pred_sma = pred_sma.mean(dim=1) * self._scale_y
+        loss_sma_raw_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)
+        loss_sma_kelly_rsq = self._rsq_loss(pred_sma[:, [1]] * 0.1, y[:, [6]], w)
         pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.01, pred_sma)
         pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.10, pred_sma)
         pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.25, pred_sma)
-        loss_sma_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+        loss_sma_zerox_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
 
+        loss_ll_raw_rsq = self._rsq_loss(pred_lead_lag20[:, [1]], y[:, [6]], w)
+        loss_ll_kelly_rsq = self._rsq_loss(pred_lead_lag20[:, [1]] * 0.1, y[:, [6]], w)
         pred_lead_lag20 = pred_lead_lag20[:, 10, [1, 2]] * self._scale_y
         pred_lead_lag20 = torch.where(pred_class[:, [0, 3]] == 0, pred_lead_lag20 * 0.01, pred_lead_lag20)
         pred_lead_lag20 = torch.where(pred_class[:, [0, 3]] == 1, pred_lead_lag20 * 0.10, pred_lead_lag20)
         pred_lead_lag20 = torch.where(pred_class[:, [0, 3]] == 2, pred_lead_lag20 * 0.25, pred_lead_lag20)
-        loss_ll = self._rsq_loss(pred_lead_lag20[:, [1]], y[:, [6]], w)
+        loss_ll_zerox_rsq = self._rsq_loss(pred_lead_lag20[:, [1]], y[:, [6]], w)
 
-        loss = loss_rsq + loss_sma_rsq + loss_ll
+        loss = (
+            loss_raw_rsq
+            + loss_kelly_rsq
+            + loss_zerox_rsq
+            + loss_sma_raw_rsq
+            + loss_sma_kelly_rsq
+            + loss_sma_zerox_rsq
+            + loss_ll_raw_rsq
+            + loss_ll_kelly_rsq
+            + loss_ll_zerox_rsq
+        ) / 9
         return loss, {
-            "loss_rsq": loss_rsq,
-            "loss_sma_rsq": loss_sma_rsq,
-            "loss_ll": loss_ll,
+            "loss_raw_rsq": loss_raw_rsq,
+            "loss_kelly_rsq": loss_kelly_rsq,
+            "loss_zerox_rsq": loss_zerox_rsq,
+            "loss_sma_raw_rsq": loss_sma_raw_rsq,
+            "loss_sma_kelly_rsq": loss_sma_kelly_rsq,
+            "loss_sma_zerox_rsq": loss_sma_zerox_rsq,
+            "loss_ll_raw_rsq": loss_ll_raw_rsq,
+            "loss_ll_kelly_rsq": loss_ll_kelly_rsq,
+            "loss_ll_zerox_rsq": loss_ll_zerox_rsq,
         }
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
@@ -304,5 +330,5 @@ class ModelSpecV12(BaseModelSpec):
     def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
         """Transform data source before splitting into inputs and targets."""
         df = append_mean_features(df)
-        df = append_lagged_features(df)
+        df = append_lagged_features(df, 1)
         return df
