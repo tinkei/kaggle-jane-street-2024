@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 
+import polars as pl
+import torch
 from torch import nn
+
+from rtmdf.cal.loss import r_square_loss
 
 
 class BaseModelSpec(ABC):
@@ -13,6 +17,9 @@ class BaseModelSpec(ABC):
     _features: list[str] = [f"feature_{i:02d}" for i in range(79)]
     _responders: list[str] = [f"responder_{i:01d}" for i in range(9)]
     _model: nn.Module
+    _mae_loss = nn.L1Loss()
+    _mse_loss = nn.MSELoss()
+    _rsq_loss = r_square_loss
 
     def __init__(self):
         # Default columns.
@@ -50,16 +57,47 @@ class BaseModelSpec(ABC):
         """Columns in data source to be used as symbol weight."""
         return self._cols_w
 
-    # @cols_w.setter
-    # def cols_w(self, value: list[str]):
-    #     self._cols_w = value
-
     @property
     def model(self) -> nn.Module:
         """PyTorch neural network for prediction."""
         return self._model
 
-    # @property
-    # @abstractmethod
-    # def test(self):
-    #     pass
+    @property
+    def device(self) -> str:
+        """Get PyTorch device."""
+        return self._device
+
+    @device.setter
+    def device(self, device: str):
+        """Set PyTorch device."""
+        self._model = self._model.to(device)
+        self._device = device
+
+    def log_model_params(self, model: nn.Module | None = None) -> None:
+        """Print model parameter count."""
+        if model is None:
+            model = self._model
+        model_total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"Model has {model_total_params:,} parameters, amongst which {trainable_params:,} are trainable.")
+
+    @abstractmethod
+    def eval_loss_train(
+        self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Evaluate prediction loss for training."""
+
+    @abstractmethod
+    def eval_loss_test(
+        self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Evaluate prediction loss for test set."""
+
+    @abstractmethod
+    def predict(self, X: torch.Tensor) -> pl.DataFrame:
+        """Predict "responder_6" given input."""
+
+    # Optional.
+    def predict_custom(self, X: torch.Tensor) -> pl.DataFrame:
+        """Predict "responder_6" and other user-defined time series given input."""
+        raise NotImplementedError("Custom prediction not implemented.")

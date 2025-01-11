@@ -1,3 +1,7 @@
+import polars as pl
+import torch
+from torch import nn
+
 from rtmdf.constant import SMA_RESPONDER_MAP
 from rtmdf.model.mlp import NeuralNetworkV7
 from rtmdf.model.spec import BaseModelSpec
@@ -30,3 +34,104 @@ class ModelSpecV13(BaseModelSpec):
             dropout=0.5,
             steps_predict=5,
         )
+
+        # Scale predictions smaller for training, then scale back during evaluation.
+        self._scale_y = 10
+
+    def eval_loss_train(
+        self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Evaluate prediction loss for training."""
+        if self._xen_loss is None:
+            self._xen_loss = nn.CrossEntropyLoss(
+                weight=torch.Tensor([0.55, 0.22, 0.14, 0.09]).to(self.device), label_smoothing=0.05
+            )
+        if to_device:
+            X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
+        y_pred = self._model(X)
+        pred_sma, pred_regress, pred_prob = y_pred
+        # self.cols_y == [
+        #     'responder_0', 'responder_1', 'responder_2', 'responder_3', 'responder_4',
+        #     'responder_5', 'responder_6', 'responder_7', 'responder_8',
+        #     'responder_2_lead_4', 'responder_2_lead_8', 'responder_2_lead_12', 'responder_2_lead_16',
+        #     'responder_5_lead_4', 'responder_5_lead_8', 'responder_5_lead_12', 'responder_5_lead_16',
+        #     'responder_8_lead_4', 'responder_8_lead_8', 'responder_8_lead_12', 'responder_8_lead_16',
+        # ]
+        # len(self.cols_y) 21
+        # y.size() torch.Size([37752, 21])
+
+        y_abs = y[:, 3:9].abs()
+        y = y / self._scale_y
+
+        # Loss from directly regressing responders and classifying magnitudes of responders.
+        y_class = torch.zeros_like(y_abs, dtype=torch.long)
+        y_class = torch.where(y_abs > 0.06, 1, y_class)
+        y_class = torch.where(y_abs > 0.15, 2, y_class)
+        y_class = torch.where(y_abs > 0.26, 3, y_class)
+        loss_xen = self._xen_loss(pred_prob, y_class)
+        loss_mse = self._mse_loss(pred_regress, y[:, :9]) * self._scale_y
+        loss_rsq = self._rsq_loss(pred_regress[:, 3:9], y[:, 3:9], w)  # / 6
+        loss = loss_rsq + loss_mse / 2 + loss_xen / 4
+
+        # Loss from reconstructing SMA.
+        # print("pred_sma.size()", pred_sma.size())  # (batch, 5, 2)
+        loss_sma004_r3 = self._mse_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]]) * self._scale_y
+        loss_sma004_r6 = self._mse_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]]) * self._scale_y
+        loss_sma020_r3 = self._mse_loss(pred_sma[:, :, 0].mean(dim=1), y[:, 3]) * self._scale_y
+        loss_sma020_r6 = self._mse_loss(pred_sma[:, :, 1].mean(dim=1), y[:, 6]) * self._scale_y
+        loss_sma_rsq = self._rsq_loss(pred_sma.mean(dim=1), y[:, [3, 6]], w)
+        loss_sma_rsq += self._rsq_loss(pred_sma[:, :, 0], y[:, [5, 13, 14, 15, 16]], w)
+        loss_sma_rsq += self._rsq_loss(pred_sma[:, :, 1], y[:, [8, 17, 18, 19, 20]], w)
+        loss_sma_rsq /= 12  # 2 + 5 + 5. Adjust here s.t. outliers don't impact solution too much.
+        loss += (loss_sma004_r3 + loss_sma004_r6 + loss_sma020_r3 + loss_sma020_r6 + loss_sma_rsq) / 5
+
+        # Debug sanity check.
+        assert all(["responder_3" in col for col in self.cols_y[[3]]])
+        assert all(["responder_6" in col for col in self.cols_y[[6]]])
+        assert all(["responder_5" in col for col in self.cols_y[[5, 13, 14, 15, 16]]])
+        assert all(["responder_8" in col for col in self.cols_y[[8, 17, 18, 19, 20]]])
+
+        return loss, {
+            "loss_rsq": loss_rsq,
+            "loss_mse": loss_mse,
+            "loss_xen": loss_xen,
+            "loss_sma004_r3": loss_sma004_r3,
+            "loss_sma004_r6": loss_sma004_r6,
+            "loss_sma020_r3": loss_sma020_r3,
+            "loss_sma020_r6": loss_sma020_r6,
+            "loss_sma_rsq": loss_sma_rsq,
+        }
+
+    def eval_loss_test(
+        self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
+    ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+        """Evaluate prediction loss for test set."""
+        if to_device:
+            X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
+        y_pred = self._model(X)
+        pred_sma, pred_regress, pred_prob = y_pred
+        pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
+        # print("pred_regress", pred_regress.size())  # (batch, num_responder)
+        # print("pred_prob   ", pred_prob.size())     # (batch, num_class, num_responder)
+        # print("pred_class  ", pred_class.size())    # (batch, num_responder)
+
+        pred_regress = pred_regress[:, 3:9] * self._scale_y
+        pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
+        pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
+        pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
+        loss_rsq = self._rsq_loss(pred_regress[:, [6]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+
+        pred_sma = pred_sma.mean(dim=1) * self._scale_y
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.25, pred_sma)
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.50, pred_sma)
+        loss_sma_rsq = self._rsq_loss(pred_sma[:, [1]], y[:, [6]], w)  # Consider only Responder 6 in test loss.
+
+        loss = loss_rsq + loss_sma_rsq
+        return loss, {
+            "loss_rsq": loss_rsq,
+            "loss_sma_rsq": loss_sma_rsq,
+        }
+
+    def predict(self, X: torch.Tensor) -> pl.DataFrame:
+        """Predict "responder_6" given input."""

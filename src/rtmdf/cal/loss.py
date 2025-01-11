@@ -12,3 +12,10 @@ def get_symbolic_loss() -> tuple:
     grad_eq = r_square_eq.diff(y_pred[i])
     hess_eq = r_square_eq.diff(y_pred[i]).diff(y_pred[i])
     return r_square_eq, grad_eq, hess_eq
+
+
+def r_square_loss(y_pred, y_true, weight):
+    """Modify R^2 Score s.t. it ranges [0, +inf) instead of (-inf, 1]."""
+    nominator = y_true - y_pred
+    r_square = 1.0 - (weight * nominator * nominator).sum() / (weight * y_true * y_true).sum()
+    return -(r_square - 1)
