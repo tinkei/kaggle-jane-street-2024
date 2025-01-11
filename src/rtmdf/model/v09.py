@@ -2,6 +2,7 @@ import polars as pl
 import torch
 from torch import nn
 
+from rtmdf.cal.transform import append_mean_features
 from rtmdf.model.mlp import NeuralNetworkV5
 from rtmdf.model.spec import BaseModelSpec
 
@@ -100,3 +101,8 @@ class ModelSpecV09(BaseModelSpec):
         pred = pl.DataFrame(pred_regress.detach().cpu().numpy() / 2.0, schema=[f"responder_{i:01d}" for i in range(9)])
         pred = pred.select(pl.col("responder_6").alias("predict"))
         return pred
+
+    def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
+        """Transform data source before splitting into inputs and targets."""
+        df = append_mean_features(df)
+        return df

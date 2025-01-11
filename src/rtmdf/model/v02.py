@@ -52,3 +52,7 @@ class ModelSpecV02(BaseModelSpec):
         pred = pl.DataFrame(y_pred.detach().cpu().numpy(), schema=[f"responder_{i:01d}" for i in range(9)])
         pred = pred.select(pl.col("responder_6").alias("predict"))
         return pred  # Always a single column.
+
+    def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
+        """Transform data source before splitting into inputs and targets."""
+        return df

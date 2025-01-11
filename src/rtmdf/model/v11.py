@@ -3,6 +3,7 @@ import polars as pl
 import torch
 from torch import nn
 
+from rtmdf.cal.transform import append_mean_features
 from rtmdf.constant import SMA_RESPONDER_MAP
 from rtmdf.model.mlp import NeuralNetworkV7
 from rtmdf.model.spec import BaseModelSpec
@@ -220,3 +221,8 @@ class ModelSpecV11(BaseModelSpec):
             responder_6_censored=pred_censored["responder_6_censored"],
         )
         return pred
+
+    def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
+        """Transform data source before splitting into inputs and targets."""
+        df = append_mean_features(df)
+        return df

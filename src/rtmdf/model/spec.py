@@ -106,3 +106,7 @@ class BaseModelSpec(ABC):
     def predict_custom(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" and other user-defined time series given input."""
         raise NotImplementedError("Custom prediction not implemented.")
+
+    @abstractmethod
+    def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
+        """Transform data source before splitting into inputs and targets."""
