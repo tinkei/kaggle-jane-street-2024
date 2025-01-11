@@ -43,5 +43,11 @@ class ModelSpecV01(BaseModelSpec):
             "loss_rsq": loss_rsq,
         }
 
-    def predict(self, X: torch.Tensor) -> pl.DataFrame:
-        """Predict "responder_6" given input."""
+    def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
+        """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""
+        if to_device:
+            X = X.to(self.device)
+        y_pred = self._model(X)
+
+        pred = pl.DataFrame(y_pred.detach().cpu().numpy(), schema=["predict"])
+        return pred  # Always a single column.

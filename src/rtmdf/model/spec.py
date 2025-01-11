@@ -94,10 +94,10 @@ class BaseModelSpec(ABC):
         """Evaluate prediction loss for test set."""
 
     @abstractmethod
-    def predict(self, X: torch.Tensor) -> pl.DataFrame:
-        """Predict "responder_6" given input."""
+    def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
+        """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""
 
     # Optional.
-    def predict_custom(self, X: torch.Tensor) -> pl.DataFrame:
+    def predict_custom(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" and other user-defined time series given input."""
         raise NotImplementedError("Custom prediction not implemented.")

@@ -136,5 +136,82 @@ class ModelSpecV11(BaseModelSpec):
             "loss_sma_rsq": loss_sma_rsq,
         }
 
-    def predict(self, X: torch.Tensor) -> pl.DataFrame:
-        """Predict "responder_6" given input."""
+    def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
+        """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""
+        if to_device:
+            X = X.to(self.device)
+        y_pred = self._model(X)
+        pred_sma, pred_regress, pred_prob = y_pred
+
+        pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
+        pred_regress = pred_regress * self._scale_y
+        pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
+        pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
+        pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
+
+        pred_sma = pred_sma.mean(dim=1) * self._scale_y
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.25, pred_sma)
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.50, pred_sma)
+
+        weight_sma = 0.75
+        pred = (
+            pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
+            + pred_sma.detach().cpu().numpy() * weight_sma
+        )
+        pred = pl.DataFrame(pred, schema=[f"responder_{i:01d}" for i in [3, 6]])
+        pred = pred.select(pl.col("responder_6").alias("predict"))
+        return pred  # Always a single column.
+
+    def predict_custom(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
+        """Predict "responder_6" and other user-defined time series given input."""
+        if to_device:
+            X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
+        y_pred = self._model(X)
+        pred_sma, pred_regress, pred_prob = y_pred
+
+        # Return unfiltered predictions to user.
+        pred_regress_raw = torch.clone(pred_regress)
+        pred_sma_raw = torch.clone(pred_sma)
+
+        pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
+        pred_regress = pred_regress * self._scale_y
+        pred_regress = torch.where(pred_class == 0, pred_regress * 0.00, pred_regress)
+        pred_regress = torch.where(pred_class == 1, pred_regress * 0.25, pred_regress)
+        pred_regress = torch.where(pred_class == 2, pred_regress * 0.50, pred_regress)
+
+        pred_sma = pred_sma.mean(dim=1) * self._scale_y
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 0, pred_sma * 0.00, pred_sma)
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 1, pred_sma * 0.25, pred_sma)
+        pred_sma = torch.where(pred_class[:, [0, 3]] == 2, pred_sma * 0.50, pred_sma)
+
+        weight_sma = 0.75
+        # Include raw predictions.
+        pred = pred_regress_raw.detach().cpu().numpy()  # Only have predictions for responders 3 - 8.
+        pred[:, [0, 3]] = pred[:, [0, 3]] * (1 - weight_sma) + pred_sma_raw.detach().cpu().numpy() * weight_sma
+        pred = pl.DataFrame(pred, schema=[f"responder_{i:01d}" for i in range(3, 9)])
+        # Artificially create columns for responders 0 - 2.
+        pred = pred.with_columns(
+            pl.col(f"responder_{i + 3:01d}")
+            .truediv(self._scale_y)
+            .add(1.0)
+            .log()
+            .sub(pl.col(f"responder_{i + 6:01d}").truediv(self._scale_y).add(1.0).log())
+            .exp()
+            .sub(1.0)
+            .mul(self._scale_y)
+            .alias(f"responder_{i:01d}")
+            for i in range(0, 3)
+        )
+        pred = pred[[f"responder_{i:01d}" for i in range(9)]]
+        # Include filtered predictions,
+        pred_censored = (
+            pred_regress[:, [0, 3]].detach().cpu().numpy() * (1 - weight_sma)
+            + pred_sma.detach().cpu().numpy() * weight_sma
+        )
+        pred_censored = pl.DataFrame(pred_censored, schema=[f"responder_{i:01d}_censored" for i in [3, 6]])
+        pred = pred.with_columns(
+            responder_3_censored=pred_censored["responder_3_censored"],
+            responder_6_censored=pred_censored["responder_6_censored"],
+        )
+        return pred
