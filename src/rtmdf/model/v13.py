@@ -204,8 +204,8 @@ class ModelSpecV13(BaseModelSpec):
         pred_sma, pred_regress, pred_prob = y_pred
 
         # Return unfiltered predictions to user.
-        pred_regress_raw = torch.clone(pred_regress)
-        pred_sma_raw = torch.clone(pred_sma)
+        pred_regress_raw = torch.clone(pred_regress) * self._scale_y
+        pred_sma_raw = torch.clone(pred_sma.mean(dim=1)) * self._scale_y
 
         pred_class = nn.Softmax(dim=1)(pred_prob).argmax(1)
         pred_regress = pred_regress[:, 3:9] * self._scale_y  # Select only responders 3 - 8 from here on out.

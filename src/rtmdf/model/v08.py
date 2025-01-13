@@ -21,6 +21,12 @@ class ModelSpecV08(BaseModelSpec):
         # PyTorch model.
         self._model = NeuralNetworkV4(in_size=82 + 79, out_size=9, hidden=400, num_layers=20, dropout=0.5)
 
+        # Scale final predictions (to avoid expensive mistakes).
+        self._scale_pred = 1.0
+
+        # Scale predictions in test.
+        self.test_scales = [0.001, 0.003, 0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.25, 1.5]
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -41,9 +47,8 @@ class ModelSpecV08(BaseModelSpec):
             X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
         y_pred = self._model(X)
         loss_rsq = self._rsq_loss(y_pred, y, w)
-        return loss_rsq, {
-            "loss_rsq": loss_rsq,
-        }
+        named_losses = {f"loss_rsq_{scale:.4f}": self._rsq_loss(y_pred * scale, y, w) for scale in self.test_scales}
+        return loss_rsq, named_losses
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""
