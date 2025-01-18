@@ -8,11 +8,12 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from sklearn.preprocessing import FunctionTransformer
 from torch import nn
 
+# from rtmdf.constant import SEED
 from rtmdf.constant import SEED
 from rtmdf.model.spec import BaseModelSpec
 
 
-class ModelSpecV20(BaseModelSpec):
+class ModelSpecV21(BaseModelSpec):
 
     def __init__(self):
         super().__init__()
@@ -26,12 +27,12 @@ class ModelSpecV20(BaseModelSpec):
         # PyTorch model.
         self._model: TSMixerModel = TSMixerModel(
             **self.create_params(
-                input_chunk_length=50,
-                output_chunk_length=50,
+                input_chunk_length=120,
+                output_chunk_length=120,
                 full_training=True,
             ),
             use_static_covariates=True,
-            model_name="tsm_v20",
+            model_name="tsm_v21",
         )
 
     @property
@@ -71,7 +72,7 @@ class ModelSpecV20(BaseModelSpec):
             limit_train_batches = None
             limit_val_batches = None
             max_epochs = 1000  # 200
-            batch_size = 512
+            batch_size = 256
         else:
             limit_train_batches = 20
             limit_val_batches = 10
@@ -105,6 +106,8 @@ class ModelSpecV20(BaseModelSpec):
         # For probabilistic models, we use quantile regression, and set `loss_fn` to `None`.
         likelihood = QuantileRegression()
         loss_fn = None
+        # likelihood = None
+        # loss_fn = r_square_loss
 
         return {
             "input_chunk_length": input_chunk_length,  # Lookback window.
@@ -121,7 +124,7 @@ class ModelSpecV20(BaseModelSpec):
             "lr_scheduler_kwargs": lr_scheduler_kwargs,
             "likelihood": likelihood,  # Use a `likelihood` for probabilistic forecasts.
             "loss_fn": loss_fn,  # Use a `loss_fn` for determinsitic model.
-            "save_checkpoints": False,  # Checkpoint to retrieve the best performing model state.
+            "save_checkpoints": True,  # Checkpoint to retrieve the best performing model state.
             "force_reset": True,  # If set to True, any previously-existing model with the same name will be reset (all checkpoints will be discarded). Default: False.
             "batch_size": batch_size,
             "random_state": SEED,
