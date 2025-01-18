@@ -36,6 +36,11 @@ class ModelSpecV21(BaseModelSpec):
         )
 
     @property
+    def version(self) -> int:
+        """Model version."""
+        return 21
+
+    @property
     def model(self) -> nn.Module:
         """PyTorch neural network for prediction."""
         return self._model.model

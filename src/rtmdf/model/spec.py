@@ -33,6 +33,11 @@ class BaseModelSpec(ABC):
         return r_square_loss(y_pred, y_true, weight)
 
     @property
+    @abstractmethod
+    def version(self) -> int:
+        """Model version."""
+
+    @property
     def index(self) -> list[str]:
         """Data source's index: "date_id", "time_id", "symbol_id"."""
         return self._index

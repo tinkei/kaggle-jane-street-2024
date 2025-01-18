@@ -63,6 +63,11 @@ class ModelSpecV12(BaseModelSpec):
         # Scale final predictions (to avoid expensive mistakes).
         self._scale_pred = 0.1
 
+    @property
+    def version(self) -> int:
+        """Model version."""
+        return 12
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -364,8 +369,79 @@ class ModelSpecV12(BaseModelSpec):
         )
         return pred
 
+    def create_lag_responders_v12(self, df: pl.LazyFrame, lag_responders_df: pl.LazyFrame) -> pl.LazyFrame:
+        """
+        We do not call this function in `transform_source()` due to the external input dependency on `lag_responders_df`
+
+        These have very different meaning between V11 and V12.
+        In V11 these are the real lags from the "time_id" right before.
+        In V12 these are the last lags from the previous "date_id".
+        """
+        # Extra (4 + 20 + 120/20) * 3 = 90 columns.
+        unique_dates = df.select("date_id").unique().sort(by="date_id")
+        if isinstance(df, pl.LazyFrame):
+            unique_dates = unique_dates.collect()
+        lag_responders_subset = lag_responders_df.filter(pl.col("date_id").is_in(unique_dates))
+        for col in SMA_RESPONDER_MAP[4]:
+            for lag in range(1, 4 + 1):
+                df = df.join(
+                    lag_responders_subset.filter(pl.col("lag_time_id") == lag).select(
+                        ["date_id", "symbol_id", pl.col(f"{col}_shift_1").alias(f"{col}_lag_{lag}")]
+                    ),
+                    how="left",
+                    on=["date_id", "symbol_id"],
+                )
+        for col in SMA_RESPONDER_MAP[20]:
+            for lag in range(1, 20 + 1):
+                df = df.join(
+                    lag_responders_subset.filter(pl.col("lag_time_id") == lag).select(
+                        ["date_id", "symbol_id", pl.col(f"{col}_shift_1").alias(f"{col}_lag_{lag}")]
+                    ),
+                    how="left",
+                    on=["date_id", "symbol_id"],
+                )
+        for col in SMA_RESPONDER_MAP[120]:
+            for lag in range(1, 120 + 1, 20):
+                df = df.join(
+                    lag_responders_subset.filter(pl.col("lag_time_id") == lag).select(
+                        ["date_id", "symbol_id", pl.col(f"{col}_shift_1").alias(f"{col}_lag_{lag}")]
+                    ),
+                    how="left",
+                    on=["date_id", "symbol_id"],
+                )
+        return df
+
+    def create_lead_responder_targets_v12(self, df: pl.LazyFrame) -> pl.LazyFrame:
+        """These leading features are only used in training target."""
+        for col in SMA_RESPONDER_MAP[4]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(-i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lead_{i}")
+                for i in range(0, 20, 4)
+            )
+        for col in SMA_RESPONDER_MAP[4]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(-i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lead_v2_{i}")
+                for i in range(-4, 25)
+            )
+        for col in SMA_RESPONDER_MAP[20]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(-i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lead_v2_{i}")
+                for i in range(-10, 11)
+            )
+        return df
+
     def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
         """Transform data source before splitting into inputs and targets."""
         df = append_mean_features(df)
         df = append_lagged_features(df, 1)
+        # Still need to call `create_lag_responders_v12()` and `create_lead_responder_targets_v12()` manually.
         return df

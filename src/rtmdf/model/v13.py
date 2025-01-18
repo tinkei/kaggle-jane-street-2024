@@ -47,6 +47,11 @@ class ModelSpecV13(BaseModelSpec):
         # Scale final predictions (to avoid expensive mistakes).
         self._scale_pred = 0.1
 
+    @property
+    def version(self) -> int:
+        """Model version."""
+        return 13
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -278,8 +283,21 @@ class ModelSpecV13(BaseModelSpec):
         )
         return pred
 
+    def create_lead_responder_targets_v11(self, df: pl.LazyFrame) -> pl.LazyFrame:
+        """These leading features are only used in training target."""
+        for col in SMA_RESPONDER_MAP[4]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(-i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lead_{i}")
+                for i in range(4, 20, 4)
+            )
+        return df
+
     def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
         """Transform data source before splitting into inputs and targets."""
         df = append_mean_features(df)
         df = append_lagged_features(df, 1)
+        df = self.create_lead_responder_targets_v11(df)
         return df

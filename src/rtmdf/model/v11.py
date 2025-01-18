@@ -53,6 +53,11 @@ class ModelSpecV11(BaseModelSpec):
         # Scale final predictions (to avoid expensive mistakes).
         self._scale_pred = 0.1
 
+    @property
+    def version(self) -> int:
+        """Model version."""
+        return 11
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
@@ -247,7 +252,50 @@ class ModelSpecV11(BaseModelSpec):
         )
         return pred
 
+    def create_lag_responder_features_v11(self, df: pl.LazyFrame) -> pl.LazyFrame:
+        # Extra (20 + 120 + 4) * 3 = 432 columns. But nah.
+        # Extra (4 + 20 + 120/20) * 3 = 90 columns.
+        for col in SMA_RESPONDER_MAP[4]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lag_{i}")
+                for i in range(1, 4 + 1)
+            )
+        for col in SMA_RESPONDER_MAP[20]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lag_{i}")
+                for i in range(1, 20 + 1)
+            )
+        for col in SMA_RESPONDER_MAP[120]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lag_{i}")
+                for i in range(1, 120 + 1, 20)
+            )
+        return df
+
+    def create_lead_responder_targets_v11(self, df: pl.LazyFrame) -> pl.LazyFrame:
+        """These leading features are only used in training target."""
+        for col in SMA_RESPONDER_MAP[4]:
+            df = df.with_columns(
+                pl.col(col)
+                .shift(-i)
+                .over(partition_by=["date_id", "symbol_id"], order_by=["time_id"])
+                .alias(f"{col}_lead_{i}")
+                for i in range(4, 20, 4)
+            )
+        return df
+
     def transform_source(self, df: pl.DataFrame | pl.LazyFrame) -> pl.DataFrame | pl.LazyFrame:
         """Transform data source before splitting into inputs and targets."""
         df = append_mean_features(df)
+        df = self.create_lag_responder_features_v11(df)
+        df = self.create_lead_responder_targets_v11(df)
         return df

@@ -26,6 +26,11 @@ class ModelSpecV09(BaseModelSpec):
         # https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/24
         self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
+    @property
+    def version(self) -> int:
+        """Model version."""
+        return 9
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:

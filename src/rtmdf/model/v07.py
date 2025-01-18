@@ -21,6 +21,11 @@ class ModelSpecV07(BaseModelSpec):
         # PyTorch model.
         self._model = NeuralNetworkV3(in_size=82 + 79, out_size=9, hidden=400, num_layers=20, dropout=0.25)
 
+    @property
+    def version(self) -> int:
+        """Model version."""
+        return 7
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:

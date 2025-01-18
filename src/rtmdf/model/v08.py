@@ -27,6 +27,11 @@ class ModelSpecV08(BaseModelSpec):
         # Scale predictions in test.
         self.test_scales = [0.001, 0.003, 0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5, 0.8, 1, 1.25, 1.5]
 
+    @property
+    def version(self) -> int:
+        """Model version."""
+        return 8
+
     def eval_loss_train(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
