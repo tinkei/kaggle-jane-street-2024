@@ -25,8 +25,8 @@ class ModelSpecV20(BaseModelSpec):
         # PyTorch model.
         self._model = TSMixerModel(
             **self.create_params(
-                input_chunk_length=100,
-                output_chunk_length=100,
+                input_chunk_length=50,
+                output_chunk_length=50,
                 full_training=True,
             ),
             use_static_covariates=True,
@@ -122,24 +122,21 @@ class ModelSpecV20(BaseModelSpec):
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Evaluate prediction loss for training."""
-        if to_device:
-            X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
-        y_pred = self._model(X)
-        loss_rsq = self._rsq_loss(y_pred, y, w)
-        return loss_rsq, {
-            "loss_rsq": loss_rsq,
-        }
+        raise NotImplementedError("V20 and above uses PyTorch Lightning Trainer instead of our custom implementation.")
 
     def eval_loss_test(
         self, X: torch.Tensor, y: torch.Tensor, w: torch.Tensor, to_device: bool = True
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Evaluate prediction loss for test set."""
-        if to_device:
-            X, y, w = X.to(self.device), y.to(self.device), w.to(self.device)
-        y_pred = self._model(X)
-        loss_rsq = self._rsq_loss(y_pred, y, w)
-        named_losses = {f"loss_rsq_{scale:.4f}": self._rsq_loss(y_pred * scale, y, w) for scale in self.test_scales}
-        return loss_rsq, named_losses
+        raise NotImplementedError("V20 and above uses PyTorch Lightning Trainer instead of our custom implementation.")
+
+    def log_loss_train(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> str:
+        """Return formatted training loss to be printed."""
+        raise NotImplementedError("V20 and above uses PyTorch Lightning Trainer instead of our custom implementation.")
+
+    def log_loss_test(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> None:
+        """Print test loss."""
+        raise NotImplementedError("V20 and above uses PyTorch Lightning Trainer instead of our custom implementation.")
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""

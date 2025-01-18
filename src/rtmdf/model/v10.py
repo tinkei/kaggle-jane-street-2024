@@ -23,6 +23,7 @@ class ModelSpecV10(BaseModelSpec):
         self._model = NeuralNetworkV6(in_size=82 + 79, out_size=9, hidden=300, num_layers=20, dropout=0.5)
 
         # Cross-Entropy loss.
+        # https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/24
         self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
     def eval_loss_train(
@@ -85,6 +86,20 @@ class ModelSpecV10(BaseModelSpec):
         return loss_rsq, {
             "loss_rsq": loss_rsq,
         }
+
+    def log_loss_train(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> str:
+        """Return formatted training loss to be printed."""
+        log_str = (
+            f"R^2: {1 - cum_named_losses['loss_rsq']:>+5f} ({cum_named_losses['loss_rsq']:>5f}) "
+            f"MSE Loss: {cum_named_losses['loss_mse']:>7f} "
+            f"Cross Entropy: {cum_named_losses['loss_xen']:>7f}"
+        )
+        return log_str
+
+    def log_loss_test(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> None:
+        """Print test loss."""
+        cum_loss /= sum_batch_sizes
+        print(f"Test R^2 score: {1 - cum_loss:>+5f}")
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""

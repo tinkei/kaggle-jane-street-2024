@@ -50,6 +50,19 @@ class ModelSpecV08(BaseModelSpec):
         named_losses = {f"loss_rsq_{scale:.4f}": self._rsq_loss(y_pred * scale, y, w) for scale in self.test_scales}
         return loss_rsq, named_losses
 
+    def log_loss_train(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> str:
+        """Return formatted training loss to be printed."""
+        log_str = f"R^2: {1 - cum_named_losses['loss_rsq']:>+5f} ({cum_named_losses['loss_rsq']:>5f})"
+        return log_str
+
+    def log_loss_test(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> None:
+        """Print test loss."""
+        cum_loss /= sum_batch_sizes
+        print(f"Test R^2 score: {1 - cum_loss:>+5f}")
+        for scale in self.test_scales:
+            cum_named_losses[f"loss_rsq_{scale:.4f}"] /= sum_batch_sizes
+            print(f'Test R^2 scaled by {scale:.4f}x: {1 - cum_named_losses[f"loss_rsq_{scale:.4f}"]:>+5f}')
+
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""
         if to_device:

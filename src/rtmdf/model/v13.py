@@ -38,6 +38,7 @@ class ModelSpecV13(BaseModelSpec):
         )
 
         # Cross-Entropy loss.
+        # https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/24
         self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
         # Scale predictions smaller for training, then scale back during evaluation.
@@ -168,6 +169,34 @@ class ModelSpecV13(BaseModelSpec):
             "loss_sma_kelly_rsq": loss_sma_kelly_rsq,
             "loss_sma_zerox_rsq": loss_sma_zerox_rsq,
         }
+
+    def log_loss_train(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> str:
+        """Return formatted training loss to be printed."""
+        log_str_1 = (
+            f"R^2: {1 - cum_named_losses['loss_rsq']:>+5f} ({cum_named_losses['loss_rsq']:>5f}) "
+            f"MSE Loss: {cum_named_losses['loss_mse']:>7f} "
+            f"Cross Entropy: {cum_named_losses['loss_xen']:>7f}\n"
+        )
+        log_str_2 = (
+            f"SMA R^2: {1 - cum_named_losses['loss_sma_rsq']:>+5f} ({cum_named_losses['loss_sma_rsq']:>5f}) "
+            f"SMA04 R5: {cum_named_losses['loss_sma004_r5']:>5f} "
+            f"SMA04 R8: {cum_named_losses['loss_sma004_r8']:>5f} "
+            f"SMA20 R3: {cum_named_losses['loss_sma020_r3']:>5f} "
+            f"SMA20 R6: {cum_named_losses['loss_sma020_r6']:>5f}\n"
+        )
+        log_str_3 = (
+            f"SMA04 R2: {cum_named_losses['loss_sma004_r2']:>5f} " f"SMA20 R0: {cum_named_losses['loss_sma020_r0']:>5f}"
+        )
+        return log_str_1 + log_str_2 + log_str_3
+
+    def log_loss_test(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> None:
+        """Print test loss."""
+        print(f"Test R^2 (regression, raw)     : {1 - cum_named_losses['loss_raw_rsq'] / sum_batch_sizes:>+5f}")
+        print(f"Test R^2 (regression, x0.1)    : {1 - cum_named_losses['loss_kelly_rsq'] / sum_batch_sizes:>+5f}")
+        print(f"Test R^2 (regression, filtered): {1 - cum_named_losses['loss_zerox_rsq'] / sum_batch_sizes:>+5f}")
+        print(f"Test R^2 (SMA, raw)            : {1 - cum_named_losses['loss_sma_raw_rsq'] / sum_batch_sizes:>+5f}")
+        print(f"Test R^2 (SMA, x0.1)           : {1 - cum_named_losses['loss_sma_kelly_rsq'] / sum_batch_sizes:>+5f}")
+        print(f"Test R^2 (SMA, filtered)       : {1 - cum_named_losses['loss_sma_zerox_rsq'] / sum_batch_sizes:>+5f}")
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""

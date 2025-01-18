@@ -44,6 +44,7 @@ class ModelSpecV11(BaseModelSpec):
         )
 
         # Cross-Entropy loss.
+        # https://discuss.pytorch.org/t/passing-the-weights-to-crossentropyloss-correctly/14731/24
         self._xen_loss = None  # We will define it later because we don't know yet which `device` we are on.
 
         # Scale predictions smaller for training, then scale back during evaluation.
@@ -144,6 +145,27 @@ class ModelSpecV11(BaseModelSpec):
             "loss_rsq": loss_rsq,
             "loss_sma_rsq": loss_sma_rsq,
         }
+
+    def log_loss_train(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> str:
+        """Return formatted training loss to be printed."""
+        log_str_1 = (
+            f"R^2: {1 - cum_named_losses['loss_rsq']:>+5f} ({cum_named_losses['loss_rsq']:>5f}) "
+            f"MSE Loss: {cum_named_losses['loss_mse']:>7f} "
+            f"Cross Entropy: {cum_named_losses['loss_xen']:>7f}\n"
+        )
+        log_str_2 = (
+            f"SMA R^2: {1 - cum_named_losses['loss_sma_rsq']:>+5f} ({cum_named_losses['loss_sma_rsq']:>5f}) "
+            f"SMA04 R5: {cum_named_losses['loss_sma004_r5']:>5f} "
+            f"SMA04 R8: {cum_named_losses['loss_sma004_r8']:>5f} "
+            f"SMA20 R3: {cum_named_losses['loss_sma020_r3']:>5f} "
+            f"SMA20 R6: {cum_named_losses['loss_sma020_r6']:>5f}"
+        )
+        return log_str_1 + log_str_2
+
+    def log_loss_test(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> None:
+        """Print test loss."""
+        print(f"Test R^2 score    : {1 - cum_named_losses['loss_rsq'] / sum_batch_sizes:>+5f}")
+        print(f"Test SMA R^2 score: {1 - cum_named_losses['loss_sma_rsq'] / sum_batch_sizes:>+5f}")
 
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""

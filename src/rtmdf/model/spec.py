@@ -98,6 +98,28 @@ class BaseModelSpec(ABC):
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Evaluate prediction loss for test set."""
 
+    def accumulate_losses(
+        self,
+        loss: torch.Tensor,
+        named_losses: dict[str, torch.Tensor],
+        cum_loss: float,
+        cum_named_losses: dict[str, float],
+        real_batch_size: int,
+    ) -> tuple[float, dict[str, float]]:
+        """Accumulate losses over each batch."""
+        cum_loss += loss.item() * real_batch_size
+        for name, named_loss in named_losses.items():
+            cum_named_losses[name] = cum_named_losses.get(name, 0.0) + named_loss.item() * real_batch_size
+        return cum_loss, cum_named_losses
+
+    @abstractmethod
+    def log_loss_train(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> str:
+        """Return formatted training loss to be printed."""
+
+    @abstractmethod
+    def log_loss_test(self, cum_loss: float, cum_named_losses: dict[str, float], sum_batch_sizes: int = 1) -> None:
+        """Print test loss."""
+
     @abstractmethod
     def predict(self, X: torch.Tensor, to_device: bool = True) -> pl.DataFrame:
         """Predict "responder_6" given input. Returns a single-columned DataFrame "predict"."""
